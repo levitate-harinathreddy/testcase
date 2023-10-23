@@ -1,0 +1,107 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- master
+
+pool:
+  name: 'Bifrost_Dev'
+
+variables:
+- group: jfrog_jio_health_variables_autopilot
+
+steps:
+- script: |
+    sudo chmod -R 777 $(Pipeline.Workspace)
+  displayName: 'Modify Workspace Permissions'
+
+- checkout: self  # This will checkout your repo to the pipeline
+  clean: true
+
+- script: |
+      ls -la
+      python --version
+      sudo apt-get update
+      sudo apt-get install python3.8
+      Python3 --version
+      # sudo apt-get install python3-pip
+      sudo apt install python3-pip
+      python3 -m ensurepip
+      pip3 --version
+      # python -m venv venv
+      pip install twine
+  displayName: 'Install Python3 venv'
+
+# - script: |
+#       python -m venv venv
+#   displayName: 'Create Virtual Environment'
+
+- script: |
+    echo "[global]" > pip.conf
+    echo "index-url = https://Testcase:je7qivug62n3gtm24fzloypht3prsgmn4lyochodubecxnmiqlcq@devops.jio.com/JioPlatforms/_packaging/Testcase/pypi/simple/" >> pip.conf
+  displayName: 'Create pip.conf'
+
+- script: |
+    echo "[distutils]" > ~/.pypirc
+    echo "index-servers =" >> ~/.pypirc
+    echo "    pypi" >> ~/.pypirc
+    echo "    Testcase" >> ~/.pypirc
+    echo "" >> ~/.pypirc
+    echo "[Testcase]" >> ~/.pypirc
+    echo "repository=https://devops.jio.com/JioPlatforms/_packaging/Testcase/pypi/upload" >> ~/.pypirc
+    echo "username=Testcase" >> ~/.pypirc
+    echo "password=tluun2zcpojnrqznahpttxjjayn4vluelh66p7s7txkouee322uq" >> ~/.pypirc
+  displayName: 'Create .pypirc'
+
+- script: |
+    echo "from setuptools import setup, find_packages" > setup.py
+    echo "setup(" >> setup.py
+    echo "    name='mypackage'," >> setup.py
+    echo "    version='0.1'," >> setup.py
+    echo "    packages=find_packages()," >> setup.py
+    echo "    install_requires=[" >> setup.py
+    while IFS= read -r line; do
+        if [ ! -z "$line" ]; then
+            echo "        '$line'," >> setup.py
+        fi
+    done < <(tr -d '\n' < requirements.txt)
+    echo "    ]," >> setup.py
+    echo ")" >> setup.py
+  displayName: 'Create setup.py'
+
+- script: |
+    cat setup.py
+  displayName: 'setup.py'
+
+- script: |
+    Python3 -m venv python-env
+    ls -la
+    source python-env/bin/activate
+    pip install -r requirements.txt
+  displayName: 'Install Dependencies and Create Virtual Environment'
+
+# - script: |
+#       pytest
+#   displayName: 'Run Tests'
+
+- script: |
+    # source python-env/bin/activate
+    pip install wheel
+    # python setup.py build
+    python3 setup.py sdist bdist_wheel
+  displayName: 'Create Wheel Distribution'
+
+# - task: TwineAuthenticate@1
+#   inputs:
+#     pythonUploadServiceConnection: '<YourServiceConnectionName>'
+
+# - script: |
+#     # source python-env/bin/activate
+#     twine upload -r Testcase dist/*
+#   displayName: 'Upload Package to Azure Artifacts'
+
+- script: |
+    python3 -m twine upload --repository-url https://devops.jio.com/JioPlatforms/_packaging/Testcase/pypi/upload -u Testcase -p tluun2zcpojnrqznahpttxjjayn4vluelh66p7s7txkouee322uq dist/*
+  displayName: 'Publish to Azure Artifacts'
